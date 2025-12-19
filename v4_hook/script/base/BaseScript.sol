@@ -22,9 +22,10 @@ contract BaseScript is Script, Deployers {
     /////////////////////////////////////
     // --- Configure These ---
     /////////////////////////////////////
-    IERC20 internal constant token0 = IERC20(0x0165878A594ca255338adfa4d48449f69242Eb8F);
-    IERC20 internal constant token1 = IERC20(0xa513E6E4b8f2a923D98304ec87F64353C4D5C853);
-    IHooks constant hookContract = IHooks(address(0));
+    IERC20 internal constant token0 = IERC20(0x7E287bb62F87916c190b45BA0921F862Fb4b9Aa5);
+    IERC20 internal constant token1 = IERC20(0x72CC5BA2958CB688B00dFE2E578Db3BbB79eD311);
+    //IHooks constant hookContract = IHooks(address(0));
+    IHooks constant hookContract = IHooks(0xa2e71a2cB503d5a1ABdC0895e0AFfC511740E080);
     /////////////////////////////////////
 
     Currency immutable currency0;

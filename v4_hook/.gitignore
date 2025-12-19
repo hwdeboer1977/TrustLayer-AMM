@@ -7,13 +7,16 @@ out/
 /broadcast/*/31337/
 /broadcast/*/5/
 /broadcast/**/dry-run/
+/broadcast/
 
 # Docs
 docs/
 
 # Dotenv file
-.env
+.env*
 
 # Node modules
 node_modules/
 lib/
+
+*.Identifier
