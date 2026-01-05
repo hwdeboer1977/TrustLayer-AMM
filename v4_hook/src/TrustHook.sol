@@ -19,7 +19,7 @@ interface IERC20Metadata {
     function decimals() external view returns (uint8);
 }
 
-contract PegHook is BaseHook {
+contract TrustHook is BaseHook {
     using LPFeeLibrary for uint24;
     using PoolIdLibrary for PoolKey;
 
