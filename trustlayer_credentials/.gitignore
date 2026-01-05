@@ -1,0 +1,25 @@
+# Leo build artifacts
+build/
+outputs/
+*.avm
+*.prover
+*.verifier
+*ledger*
+*.Identifier
+
+# Next.js
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/build/
+
+# Environment files
+.env*
+!frontend/.env.example
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
