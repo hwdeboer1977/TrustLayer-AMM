@@ -9,6 +9,7 @@ program trustlayer_credentials_amm.aleo {
     // TESTNET
     // 1. leo build
     // 2. leo deploy --network testnet --broadcast
+    // Can check it here: https://testnet.explorer.provable.com/transaction/tx....
 
     @noupgrade
     async constructor() {}
