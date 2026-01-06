@@ -1,4 +1,4 @@
-program trustlayer_credentials.aleo {
+program trustlayer_credentials_amm.aleo {
 
     
     // DEVNET alternative 1
@@ -6,12 +6,17 @@ program trustlayer_credentials.aleo {
     // 2. leo devnet --snarkos $(which snarkos) --snarkos-features test_network --consensus-heights 0,1,2,3,4,5,6,7,8,9,10,11 --clear-storage
     // 3. leo deploy --broadcast --consensus-heights 0,1,2,3,4,5,6,7,8,9,10,11
    
+    // TESTNET
+    // 1. leo build
+    // 2. leo deploy --network testnet --broadcast
+
     @noupgrade
     async constructor() {}
 
     // ============ CONSTANTS ============
-    const ADMIN: address = aleo1rhgdu77hgyqd3xjj8ucu3jj9r2krwz6mnzyd80gncr5fxcwlh5rsvzp9px;
-    
+    //const ADMIN: address = aleo1rhgdu77hgyqd3xjj8ucu3jj9r2krwz6mnzyd80gncr5fxcwlh5rsvzp9px;
+    const ADMIN: address = aleo1d9es6d8kuzg65dlfdpx9zxchcsarh8k0hwxfx5eg6k4w7ew6gs8sv5aza0;
+
     const TIER_C_MIN: u16 = 600u16;
     const TIER_B_MIN: u16 = 700u16;
     const TIER_A_MIN: u16 = 800u16;

@@ -6,6 +6,7 @@ outputs/
 *.verifier
 *ledger*
 *.Identifier
+*cache*
 
 # Next.js
 frontend/node_modules/

@@ -1,5 +1,5 @@
 {
-  "program": "trustlayer_credentials.aleo",
+  "program": "trustlayer_credentials_amm.aleo",
   "version": "0.1.0",
   "description": "",
   "license": "MIT",
