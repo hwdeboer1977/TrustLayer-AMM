@@ -114,12 +114,18 @@ make issue RECIPIENT=aleo1d9es6d8kuzg65dlfdpx9zxchcsarh8k0hwxfx5eg6k4w7ew6gs8sv5
 #   expiry: 50000000u32.private,
 #   issuer: aleo1d9es6d8kuzg65dlfdpx9zxchcsarh8k0hwxfx5eg6k4w7ew6gs8sv5aza0.private,
 #   nonce: 12345field.private,
-#   _nonce: 7444915190774346048843485229915793026011364304537984944062013100475989215274group.public,
+#   _nonce: 6644200927086711974273859474179569160479435004059909891962670620328201451334group.public,
 #   _version: 1u8.public
 # }
 
 # 4. Prove tier (put credential on SINGLE LINE)
-make prove CRED="{owner: aleo1d9es6d8kuzg65dlfdpx9zxchcsarh8k0hwxfx5eg6k4w7ew6gs8sv5aza0.private, score: 750u16.private, expiry: 50000000u32.private, issuer: aleo1d9es6d8kuzg65dlfdpx9zxchcsarh8k0hwxfx5eg6k4w7ew6gs8sv5aza0.private, nonce: 12345field.private, _nonce: 7444915190774346048843485229915793026011364304537984944062013100475989215274group.public, _version: 1u8.public}" BLOCK=500
+make prove CRED="{owner: aleo1d9es6d8kuzg65dlfdpx9zxchcsarh8k0hwxfx5eg6k4w7ew6gs8sv5aza0.private,
+  score: 750u16.private,
+  expiry: 50000000u32.private,
+  issuer: aleo1d9es6d8kuzg65dlfdpx9zxchcsarh8k0hwxfx5eg6k4w7ew6gs8sv5aza0.private,
+  nonce: 12345field.private,
+  _nonce: 6644200927086711974273859474179569160479435004059909891962670620328201451334group.public,
+  _version: 1u8.public}" BLOCK=500
 
 # Output: 2u8 (Tier B)
 # Also outputs commitment hash in "arguments" field

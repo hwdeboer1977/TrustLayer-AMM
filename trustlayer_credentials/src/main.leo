@@ -1,4 +1,4 @@
-program trustlayer_credentials_amm.aleo {
+program trustlayer_credentials_amm_v2.aleo {
 
     
     // DEVNET alternative 1
@@ -14,10 +14,10 @@ program trustlayer_credentials_amm.aleo {
     @noupgrade
     async constructor() {}
 
+    
     // ============ CONSTANTS ============
-    //const ADMIN: address = aleo1rhgdu77hgyqd3xjj8ucu3jj9r2krwz6mnzyd80gncr5fxcwlh5rsvzp9px;
     const ADMIN: address = aleo1d9es6d8kuzg65dlfdpx9zxchcsarh8k0hwxfx5eg6k4w7ew6gs8sv5aza0;
-
+    
     const TIER_C_MIN: u16 = 600u16;
     const TIER_B_MIN: u16 = 700u16;
     const TIER_A_MIN: u16 = 800u16;
@@ -33,8 +33,8 @@ program trustlayer_credentials_amm.aleo {
 
     // ============ MAPPINGS ============
     mapping approved_issuers: address => bool;
-    mapping issued: field => bool;      // commitment => was issued
-    mapping revoked: field => bool;     // commitment => was revoked
+    mapping issued: field => bool;
+    mapping revoked: field => bool;
 
     // ============ ADMIN FUNCTIONS ============
 
@@ -95,10 +95,11 @@ program trustlayer_credentials_amm.aleo {
 
     // ============ TRADER PROOFS ============
     
+    // Prove tier - output is PUBLIC so relayer can verify
     async transition prove_tier(
         cred: Credential,
-        current_block: u32
-    ) -> (u8, Future) {
+        public current_block: u32
+    ) -> (public u8, Future) {
         assert(cred.expiry > current_block);
         
         let tier: u8 = cred.score >= TIER_A_MIN ? 3u8 :
@@ -118,11 +119,12 @@ program trustlayer_credentials_amm.aleo {
         assert(!is_revoked);
     }
 
+    // Prove minimum tier - output is PUBLIC
     async transition prove_min_tier(
         cred: Credential,
-        required_tier: u8,
-        current_block: u32
-    ) -> (bool, Future) {
+        public required_tier: u8,
+        public current_block: u32
+    ) -> (public bool, Future) {
         assert(cred.expiry > current_block);
         
         let tier: u8 = cred.score >= TIER_A_MIN ? 3u8 :
