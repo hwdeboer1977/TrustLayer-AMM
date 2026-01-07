@@ -5,7 +5,7 @@ import {Hooks} from "@uniswap/v4-core/src/libraries/Hooks.sol";
 import {HookMiner} from "@uniswap/v4-periphery/src/utils/HookMiner.sol";
 import {BaseScript} from "./base/BaseScript.sol";
 
-import {TrustHook} from "../src/TrustHook.sol";
+import {TrustLayerHook} from "../src/TrustLayerHook.sol";
 
 import "forge-std/Script.sol";
 
@@ -35,14 +35,15 @@ contract DeployHookScript is BaseScript {
             Hooks.BEFORE_SWAP_FLAG
         );
 
-        bytes memory constructorArgs = abi.encode(poolManager, address(token0), address(token1));
+        address relayer;
+        bytes memory constructorArgs = abi.encode(poolManager, relayer);
         (address hookAddress, bytes32 salt) =
-            HookMiner.find(CREATE2_FACTORY, flags, type(TrustHook).creationCode, constructorArgs);
+            HookMiner.find(CREATE2_FACTORY, flags, type(TrustLayerHook).creationCode, constructorArgs);
 
         uint256 pk = uint256(vm.envBytes32("PRIVATE_KEY"));
         vm.startBroadcast(pk);
 
-        TrustHook hook = new TrustHook{salt: salt}(poolManager, address(token0), address(token1));
+        TrustLayerHook hook = new TrustLayerHook{salt: salt}(poolManager, relayer);
 
         vm.stopBroadcast();
 
