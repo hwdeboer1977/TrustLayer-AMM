@@ -1,232 +1,186 @@
-# TrustLayer AMM: A ZK Credit-Score–Weighted AMM (Aleo) — Starter README
+# TrustLayer AMM
 
-A proof-of-concept AMM on **Aleo** where **swap parameters depend on a trader’s private credit/trust credential**, verified via **zero-knowledge proofs**.
+A ZK Credit-Score-Weighted AMM combining Aleo privacy with Uniswap V4 hooks.
 
-**Goal:** Counterparty-aware liquidity for **stablecoin / RWA pools** without doxxing identities or exposing scores on-chain.
+## Overview
 
----
-
-## Core Idea
-
-Traders present a **ZK proof** that they satisfy a **policy predicate** (e.g., `score >= 700`, not expired, issued by an approved issuer, optionally within a whitelist set).
-
-The AMM uses the resulting **tier** (A/B/C/...) to set:
-
-- `fee_bps` (dynamic fee per tier)
-- `max_trade_in` / `max_trade_out` (position limits)
-- optional: throttling/cooldowns in stress regimes
-
-The pool never sees the raw score, identity, or underlying data — only a **verified tier/policy verdict**.
-
----
-
-## High-Level Architecture
-
-### Actors
-
-1. **Issuer / Attestor**
-
-   - Produces a private credential for a trader (score + expiry + subject key + nonce)
-   - Publishes only a **commitment registry** on-chain (e.g., a Merkle root per epoch)
-
-2. **Trader**
-
-   - Holds the credential privately
-   - Generates a ZK proof: “My credential is in the latest root AND meets predicate AND not expired”
-
-3. **AMM Program**
-   - Verifies proof inside the swap call
-   - Derives `tier`
-   - Applies tier-based params and executes AMM math
-
----
-
-## Repository Structure (suggested)
+TrustLayer enables tiered trading access on Uniswap V4 based on zero-knowledge credit score proofs from Aleo. Users prove their creditworthiness without revealing their actual score, and receive preferential fees and higher trading limits.
 
 ```
-zk-credit-amm/
-├─ programs/
-│  ├─ credit_registry/               # issuer roots, revocations, policy config
-│  │  ├─ program.json
-│  │  └─ src/main.leo
-│  ├─ zk_policy/                     # ZK circuits: membership + range + expiry
-│  │  ├─ program.json
-│  │  └─ src/main.leo
-│  └─ amm_pool/                      # AMM logic + tier-based parameterization
-│     ├─ program.json
-│     └─ src/main.leo
-│
-├─ sdk/
-│  ├─ js/
-│  │  ├─ issuer/                     # creates credentials, builds commitments, updates roots
-│  │  ├─ trader/                     # builds proofs, submits swaps
-│  │  └─ common/                     # types, config, aleo client wrappers
-│  └─ README.md
-│
-├─ specs/
-│  ├─ credential_format.md
-│  ├─ threat_model.md
-│  └─ economics.md
-│
-├─ scripts/
-│  ├─ devnet_deploy.sh
-│  ├─ seed_pool.sh
-│  └─ demo_flow.sh
-│
-└─ README.md
+┌─────────────────────────────────────────────────────────────────────────┐
+│                         TRUSTLAYER FLOW                                  │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                          │
+│  ALEO (Privacy)              BACKEND (Bridge)           ETH (Trading)   │
+│  ┌─────────────┐            ┌─────────────┐           ┌─────────────┐   │
+│  │ Issue cred  │            │             │           │             │   │
+│  │ prove_tier  │───────────▶│ Verify proof│──────────▶│ Register    │   │
+│  │             │            │ Check status│           │ trader      │   │
+│  └─────────────┘            └─────────────┘           └─────────────┘   │
+│         │                                                     │          │
+│         │                   ZK Proof: "I'm Tier B"            │          │
+│         │                   (score hidden)                    ▼          │
+│         │                                             ┌─────────────┐   │
+│         │                                             │ Swap with   │   │
+│         └────────────────────────────────────────────▶│ 0.3% fee    │   │
+│                                                       │ 100K limit  │   │
+│                                                       └─────────────┘   │
+└─────────────────────────────────────────────────────────────────────────┘
 ```
 
-> You can start with **one program** and later split into three. For MVP, it’s fine to keep `registry + policy + amm` in a single Aleo program.
+## Tier System
 
----
+| Tier | Credit Score | Fee | Max Trade | Description |
+|------|--------------|-----|-----------|-------------|
+| 0 | < 600 | - | No access | Ineligible |
+| 1 | 600-699 | 0.5% | 10K tokens | Basic |
+| 2 | 700-799 | 0.3% | 100K tokens | Pro |
+| 3 | 800+ | 0.1% | 1M tokens | Whale |
 
-## Data Model
+## Repository Structure
 
-### Credential (private, held by trader)
+```
+TrustLayer-AMM/
+├── trustlayer_credentials/    # Aleo smart contract (Leo)
+├── v4_hook/                   # Uniswap V4 Hook (Solidity)
+├── backend/                   # Node.js API server
+├── frontend/                  # React web UI
+└── README.md
+```
 
-**Fields (example):**
+Each subfolder contains its own detailed README with setup instructions.
 
-- `subject_pk` (trader public key / address binding)
-- `score` (u16 or u32)
-- `expiry_ts` (u64)
-- `issuer_id` (u32)
-- `nonce` (u64 random)
+## Components
 
-**Commitment:**
+### 1. Aleo Contract (`trustlayer_credentials/`)
 
-- `C = Hash(subject_pk || score || expiry_ts || issuer_id || nonce)`
+Zero-knowledge credential system written in Leo.
 
-### On-chain state (public)
+- **Issue credentials** with hidden credit scores
+- **Prove tier** without revealing actual score
+- **On-chain verification** via commitment mappings
 
-- `current_epoch: u32`
-- `root_by_epoch[epoch] -> field` (Merkle root for valid commitments)
-- optional: `revoked_commitments[commitment] -> bool`
-- policy config: `tier thresholds`, max sizes, fee tables
+```bash
+cd trustlayer_credentials
+leo run prove_tier <credential> <block>
+```
 
----
+### 2. Uniswap V4 Hook (`v4_hook/`)
 
-## Tier Policy (example)
+Solidity hook enforcing tiered access on swaps.
 
-| Tier | Predicate (ZK)    | fee_bps | max_in          | Notes           |
-| ---- | ----------------- | ------- | --------------- | --------------- |
-| A    | score ≥ 800       | 3       | high            | “institutional” |
-| B    | 700 ≤ score < 800 | 8       | med             |                 |
-| C    | 600 ≤ score < 700 | 15      | low             |                 |
-| D    | score < 600       | 30      | very low / deny | optional gate   |
+- **beforeSwap**: Checks tier, enforces limits, sets dynamic fee
+- **Relayer pattern**: Only authorized relayer can register traders
+- **Configurable tiers**: Admin can adjust fees and limits
 
-**MVP recommendation:** do **tier-based** (discrete) rather than continuous mapping to avoid weird incentive cliffs.
+```bash
+cd v4_hook
+forge script script/01_DeployHook.s.sol --rpc-url $ARB_RPC --broadcast --via-ir
+```
 
----
+### 3. Backend (`backend/`)
 
-## Program Responsibilities
+Node.js server bridging Aleo proofs to Ethereum registration.
 
-### 1) `credit_registry` program
+- **Verify Aleo proofs** and check credential status
+- **Register traders** on Ethereum hook
+- **Query tier configs** and trader info
 
-- `set_root(epoch, root)` — controlled by issuer governance
-- `set_policy(...)` — tier thresholds, fee table, limits
-- optional: `revoke(commitment)` — revocation list
+```bash
+cd backend
+npm install && npm run dev
+```
 
-### 2) `zk_policy` program (proof verification helpers)
+### 4. Frontend (`frontend/`)
 
-- Verifies:
-  - Merkle membership: commitment ∈ root
-  - Range predicate: score meets tier threshold
-  - Expiry: `now <= expiry_ts`
-  - Binding: `subject_pk == caller_pk` (prevents credential sharing)
+React UI for end users.
 
-### 3) `amm_pool` program
+- **Connect wallet** (MetaMask/Rabby)
+- **Register** with Aleo proof TX ID
+- **View status** (tier, fees, limits)
 
-- Pool state (reserves, fee accrual)
-- `swap_exact_in(...)`:
-  1. verify ZK policy proof
-  2. compute tier
-  3. enforce `max_in`, compute `fee_bps`
-  4. run AMM math (CPMM for MVP)
-  5. update reserves + fee accounting
+```bash
+cd frontend
+npm install && npm run dev
+```
 
----
+## Quick Start
 
-## Minimal MVP: CPMM + Tier Fees
+### Prerequisites
 
-Start with a constant product AMM:
+- [Leo](https://developer.aleo.org/leo/) (for Aleo contract)
+- [Foundry](https://book.getfoundry.sh/) (for Solidity)
+- [Node.js](https://nodejs.org/) 18+ (for backend/frontend)
 
-- reserves: `x`, `y`
-- invariant: `x * y = k`
-- apply tier fee: `amount_in_after_fee = amount_in * (1 - fee_bps/10_000)`
+### 1. Deploy Aleo Contract (Testnet)
 
-Then extend later to:
+```bash
+cd trustlayer_credentials
+leo deploy --network testnet
+```
 
-- dynamic throttling under stress
-- oracle bounds (stable peg band)
-- RWA pool-specific controls
+### 2. Deploy Hook (Arbitrum Sepolia)
 
----
+```bash
+cd v4_hook
+cp .env.example .env
+# Edit .env with your keys
 
-## Demo Flow (end-to-end)
+forge script script/00_DeployMockTokens.s.sol --rpc-url $ARB_RPC --broadcast --via-ir
+forge script script/01_DeployHook.s.sol --rpc-url $ARB_RPC --broadcast --via-ir
+forge script script/02_CreatePoolAndAddLiquidity.s.sol --rpc-url $ARB_RPC --broadcast --via-ir
+```
 
-1. **Issuer** generates credential and commitment for Trader
-2. Issuer adds commitment to Merkle tree and publishes **root** on-chain for `epoch`
-3. Trader generates proof:
-   - membership in `root`
-   - score threshold (tier)
-   - not expired
-   - bound to trader address
-4. Trader calls `amm_pool.swap_exact_in(proof, public_inputs, amount_in, min_out)`
-5. AMM verifies proof and executes swap with tier params
+### 3. Start Backend
 
----
+```bash
+cd backend
+cp .env.example .env
+# Edit .env with hook address and keys
 
-## Security & Abuse Checklist (must-have)
+npm install
+npm run dev
+```
 
-- **Anti-sharing**: bind credential to trader key (`subject_pk == caller`)
-- **Expiry**: enforce expiry inside ZK circuit
-- **Revocation**: allow issuer to revoke commitments (or rotate epoch roots)
-- **Sybil controls**: issuer-level uniqueness rules; optional “one credential per subject”
-- **DoS protection**: max proof size, compute limits, graceful failure
-- **Governance**: multiple issuers / multisig / DAO for root updates and policy
+### 4. Start Frontend
 
----
+```bash
+cd frontend
+npm install
+npm run dev
+```
 
-## Roadmap
+Open http://localhost:3000
 
-### Phase 0 — Skeleton
+## End-to-End Flow
 
-- repo structure
-- policy table + types
-- stub programs and dummy verification
+1. **Issuer** creates credential for user on Aleo
+2. **User** calls `prove_tier` on Aleo → gets TX ID
+3. **User** connects ETH wallet in frontend
+4. **User** enters Aleo TX ID → clicks Register
+5. **Backend** verifies proof → registers on ETH hook
+6. **User** can now swap on Uniswap with tier benefits
 
-### Phase 1 — Working Proof + Swap
+## Documentation
 
-- Merkle membership proof (single root)
-- range proof (tier)
-- CPMM swap with tier fee
+Detailed documentation in each subfolder:
 
-### Phase 2 — Production-leaning features
+| Folder | README |
+|--------|--------|
+| `trustlayer_credentials/` | Aleo contract, Leo commands, credential structure |
+| `v4_hook/` | Solidity scripts, deployment, hook functions |
+| `backend/` | API endpoints, environment config |
+| `frontend/` | Components, user flow |
 
-- revocation / epoch rotation
-- multi-issuer roots
-- stress controls: throttling/circuit breaker
-- accounting: fees by LP share, treasury rake
+## Tech Stack
 
-### Phase 3 — RWA integrations
-
-- allowlisted institutions (membership-only tier)
-- compliance predicates (sanctions ok, residency ok) via ZK attestations
-- off-chain audit channel (selective disclosure)
-
----
-
-## Notes for Aleo Implementation
-
-- Prefer **policy predicates** (range/membership) over revealing a numeric score.
-- Keep **public inputs minimal**:
-  - epoch/root id
-  - tier id (or verified threshold id)
-  - current timestamp (or block height-derived)
-- Use salts/nonces in commitments to prevent linkage.
-
----
+- **Aleo/Leo** - Zero-knowledge smart contracts
+- **Solidity** - Uniswap V4 Hook
+- **Foundry** - Smart contract tooling
+- **Node.js/Express** - Backend API
+- **React/Vite** - Frontend UI
+- **ethers.js** - Ethereum integration
 
 ## License
 
-MIT (recommended for PoC).
+MIT

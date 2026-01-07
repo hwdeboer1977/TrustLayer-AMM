@@ -1,183 +1,325 @@
-# Uniswap v4 Hook Template
+# TrustLayer Hook
 
-**A template for writing Uniswap v4 Hooks 🦄**
+Uniswap V4 Hook with tiered trading access based on zero-knowledge credentials.
 
-### Get Started
+## Overview
 
-This template provides a starting point for writing Uniswap v4 Hooks, including a simple example and preconfigured test environment. Start by creating a new repository using the "Use this template" button at the top right of this page. Alternatively you can also click this link:
+TrustLayerHook enforces tiered trading on Uniswap V4:
+- **Tier 1 (Basic)**: 0.5% fee, max 10K tokens
+- **Tier 2 (Pro)**: 0.3% fee, max 100K tokens  
+- **Tier 3 (Whale)**: 0.1% fee, max 1M tokens
+- **Unregistered**: No access
 
-[![Use this Template](https://img.shields.io/badge/Use%20this%20Template-101010?style=for-the-badge&logo=github)](https://github.com/uniswapfoundation/v4-template/generate)
+## Project Structure
 
-1. The example hook [Counter.sol](src/Counter.sol) demonstrates the `beforeSwap()` and `afterSwap()` hooks
-2. The test template [Counter.t.sol](test/Counter.t.sol) preconfigures the v4 pool manager, test tokens, and test liquidity.
+```
+├── src/
+│   ├── TrustLayerHook.sol    # Main hook contract
+│   ├── MockUSDC.sol          # Test token (6 decimals)
+│   └── MockUSDT.sol          # Test token (6 decimals)
+├── script/
+│   ├── base/
+│   │   ├── BaseScript.sol    # Shared addresses & config
+│   │   └── LiquidityHelpers.sol
+│   ├── 00_DeployMockTokens.s.sol
+│   ├── 01_DeployHook.s.sol
+│   ├── 02_CreatePoolAndAddLiquidity.s.sol
+│   ├── 03_MintPositionToEOA.s.sol
+│   ├── 04_RegisterTrader.s.sol
+│   ├── Check_status.s.sol
+│   ├── Check_liquidity.s.sol
+│   └── Swap.s.sol
+└── test/
+```
 
-<details>
-<summary>Updating to v4-template:latest</summary>
+## Environment Setup
 
-This template is actively maintained -- you can update the v4 dependencies, scripts, and helpers:
+### `.env.anvil` (Local Testing)
 
 ```bash
-git remote add template https://github.com/uniswapfoundation/v4-template
-git fetch template
-git merge template/main <BRANCH> --allow-unrelated-histories
+# Wallet
+PRIVATE_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
+WALLET_ADDRESS=0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266
+
+# Roles
+OWNER=0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266
+RELAYER=0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266
+TRADER_ADDRESS=0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266
+
+# Tokens (set after 00_DeployMockTokens)
+TOKEN0_ADDRESS=
+TOKEN1_ADDRESS=
+
+# Hook (set after 01_DeployHook)
+HOOK_ADDRESS=
+
+# Pool (set after 02_CreatePoolAndAddLiquidity)
+TOKEN_ID=
+POOL_ID=
+
+# Liquidity amounts
+AMOUNT0=1000000000    # 1,000 tokens (6 decimals)
+AMOUNT1=1000000000    # 1,000 tokens (6 decimals)
 ```
 
-</details>
-
-### Requirements
-
-This template is designed to work with Foundry (stable). If you are using Foundry Nightly, you may encounter compatibility issues. You can update your Foundry installation to the latest stable version by running:
-
-```
-foundryup
-```
-
-To set up the project, run the following commands in your terminal to install dependencies and run the tests:
-
-```
-forge install
-forge test
-```
-
-### Local Development
-
-Other than writing unit tests (recommended!), you can only deploy & test hooks on [anvil](https://book.getfoundry.sh/anvil/) locally. Scripts are available in the `script/` directory, which can be used to deploy hooks, create pools, provide liquidity and swap tokens. The scripts support both local `anvil` environment as well as running them directly on a production network.
-
-### Executing locally with using **Anvil**:
-
-1. Start Anvil (or fork a specific chain using anvil):
+### `.env` (Arbitrum Sepolia)
 
 ```bash
+# Wallet
+PRIVATE_KEY=0xYourPrivateKey
+WALLET_ADDRESS=0xYourAddress
+
+# Roles
+OWNER=0xYourAddress
+RELAYER=0xYourAddress
+TRADER_ADDRESS=0xYourAddress
+
+# RPC
+ARB_RPC=https://sepolia-rollup.arbitrum.io/rpc
+
+# Tokens & Hook (set after deployment)
+TOKEN0_ADDRESS=
+TOKEN1_ADDRESS=
+HOOK_ADDRESS=
+TOKEN_ID=
+```
+
+## Scripts
+
+### 00_DeployMockTokens.s.sol
+
+Deploys MockUSDC and MockUSDT test tokens.
+
+```bash
+# Anvil
+forge script script/00_DeployMockTokens.s.sol --rpc-url http://127.0.0.1:8545 --broadcast -vvvv --via-ir
+
+# Arbitrum Sepolia
+forge script script/00_DeployMockTokens.s.sol --rpc-url $ARB_RPC --broadcast -vvvv --via-ir
+```
+
+**Output:** Token addresses → Update `TOKEN0_ADDRESS` and `TOKEN1_ADDRESS` in `.env`
+
+**Important:** Also update `token0` and `token1` in `BaseScript.sol`
+
+---
+
+### 01_DeployHook.s.sol
+
+Deploys TrustLayerHook with CREATE2 address mining for correct hook flags.
+
+```bash
+# Anvil
+forge script script/01_DeployHook.s.sol --rpc-url http://127.0.0.1:8545 --broadcast -vvvv --via-ir
+
+# Arbitrum Sepolia
+forge script script/01_DeployHook.s.sol --rpc-url $ARB_RPC --broadcast -vv --via-ir
+```
+
+**Output:** Hook address → Update `HOOK_ADDRESS` in `.env` and `BaseScript.sol`
+
+---
+
+### 02_CreatePoolAndAddLiquidity.s.sol
+
+Creates a new pool and adds initial liquidity in a single transaction.
+
+```bash
+# Anvil
+forge script script/02_CreatePoolAndAddLiquidity.s.sol --rpc-url http://127.0.0.1:8545 --broadcast -vvvv --via-ir
+
+# Arbitrum Sepolia
+forge script script/02_CreatePoolAndAddLiquidity.s.sol --rpc-url $ARB_RPC --broadcast -vv --via-ir
+```
+
+**Env Variables:**
+- `AMOUNT0`: Token0 amount (default: from .env)
+- `AMOUNT1`: Token1 amount (default: from .env)
+- `START_PRICE_NUM` / `START_PRICE_DEN`: Initial price ratio (default: 1/1)
+- `TICK_SPACING`: Pool tick spacing (default: 60)
+
+**Output:** Token ID → Update `TOKEN_ID` in `.env`
+
+---
+
+### 03_MintPositionToEOA.s.sol
+
+Mints additional full-range liquidity position to your wallet.
+
+```bash
+# Anvil
+forge script script/03_MintPositionToEOA.s.sol --rpc-url http://127.0.0.1:8545 --broadcast -vvvv --via-ir
+
+# Arbitrum Sepolia
+forge script script/03_MintPositionToEOA.s.sol --rpc-url $ARB_RPC --broadcast -vv --via-ir
+```
+
+**Env Variables:**
+- `AMOUNT0`: Token0 amount (default: 1000e6)
+- `AMOUNT1`: Token1 amount (default: 1000e6)
+
+---
+
+### 04_RegisterTrader.s.sol
+
+Registers a trader address with a tier (must be called by relayer).
+
+```bash
+# Anvil
+forge script script/04_RegisterTrader.s.sol --rpc-url http://127.0.0.1:8545 --broadcast -vvvv --via-ir
+```
+
+**Env Variables:**
+- `HOOK_ADDRESS`: Deployed hook address
+- `TRADER_ADDRESS`: Address to register
+
+**Default:** Registers as Tier 2 (Pro) with 1,000,000 block expiry
+
+---
+
+### Swap.s.sol
+
+Executes a token swap through the hook.
+
+```bash
+# Anvil
+forge script script/Swap.s.sol --rpc-url http://127.0.0.1:8545 --broadcast -vvvv --via-ir
+
+# Arbitrum Sepolia
+forge script script/Swap.s.sol --rpc-url $ARB_RPC --broadcast -vv --via-ir
+```
+
+**Env Variables:**
+- `AMOUNT_IN`: Swap amount (default: 100e6)
+- `ZERO_FOR_ONE`: Swap direction (default: true = token0→token1)
+
+**Note:** Trader must be registered or swap will revert with `TraderNotRegistered()`
+
+---
+
+### Check_status.s.sol
+
+View hook configuration and trader status (read-only, no gas).
+
+```bash
+# Anvil
+forge script script/Check_status.s.sol --rpc-url http://127.0.0.1:8545 -vvvv --via-ir
+```
+
+**Output:**
+- Hook admin and relayer addresses
+- All tier configurations (fee, max trade size, enabled)
+- Trader info (tier, registration block, expiry, commitment)
+- Can-swap checks for various amounts
+- Fee preview
+
+---
+
+### Check_liquidity.s.sol
+
+View pool and position liquidity details (read-only).
+
+```bash
+# Anvil
+forge script script/Check_liquidity.s.sol --rpc-url http://127.0.0.1:8545 -vvvv --via-ir
+
+# Arbitrum Sepolia
+forge script script/Check_liquidity.s.sol --rpc-url $ARB_RPC -vvvv --via-ir
+```
+
+**Env Variables:**
+- `TOKEN_ID`: Position token ID to check
+
+**Output:**
+- Pool state (sqrtPriceX96, current tick)
+- Position info (liquidity, fee growth)
+- Principal amounts at current price
+
+---
+
+## Deployment Workflow
+
+### Local (Anvil)
+
+```bash
+# 1. Start Anvil
 anvil
+
+# 2. Load environment
+set -a; source .env.anvil; set +a
+
+# 3. Deploy tokens
+forge script script/00_DeployMockTokens.s.sol --rpc-url http://127.0.0.1:8545 --broadcast -vvvv --via-ir
+# → Update TOKEN0_ADDRESS, TOKEN1_ADDRESS in .env.anvil and BaseScript.sol
+
+# 4. Deploy hook
+forge script script/01_DeployHook.s.sol --rpc-url http://127.0.0.1:8545 --broadcast -vvvv --via-ir
+# → Update HOOK_ADDRESS in .env.anvil and BaseScript.sol
+
+# 5. Create pool + liquidity
+forge script script/02_CreatePoolAndAddLiquidity.s.sol --rpc-url http://127.0.0.1:8545 --broadcast -vvvv --via-ir
+# → Update TOKEN_ID in .env.anvil
+
+# 6. Register trader
+forge script script/04_RegisterTrader.s.sol --rpc-url http://127.0.0.1:8545 --broadcast -vvvv --via-ir
+
+# 7. Swap
+forge script script/Swap.s.sol --rpc-url http://127.0.0.1:8545 --broadcast -vvvv --via-ir
 ```
 
-or
+### Arbitrum Sepolia
 
 ```bash
-anvil --fork-url <YOUR_RPC_URL>
+# 1. Load environment
+set -a; source .env; set +a
+
+# 2. Deploy (same scripts, different RPC)
+forge script script/00_DeployMockTokens.s.sol --rpc-url $ARB_RPC --broadcast -vvvv --via-ir
+forge script script/01_DeployHook.s.sol --rpc-url $ARB_RPC --broadcast -vv --via-ir
+forge script script/02_CreatePoolAndAddLiquidity.s.sol --rpc-url $ARB_RPC --broadcast -vv --via-ir
+forge script script/04_RegisterTrader.s.sol --rpc-url $ARB_RPC --broadcast -vv --via-ir
+forge script script/Swap.s.sol --rpc-url $ARB_RPC --broadcast -vv --via-ir
 ```
 
-2. Execute scripts:
+---
 
-```bash
-forge script script/00_DeployHook.s.sol \
-    --rpc-url http://localhost:8545 \
-    --private-key <PRIVATE_KEY> \
-    --broadcast
-```
+## Contract Reference
 
-### Using **RPC URLs** (actual transactions):
+### TrustLayerHook.sol
 
-:::info
-It is best to not store your private key even in .env or enter it directly in the command line. Instead use the `--account` flag to select your private key from your keystore.
-:::
+**Hook Permissions:**
+- `beforeInitialize`: Enforces dynamic fee flag
+- `beforeSwap`: Checks tier, enforces limits, sets fee
 
-### Follow these steps if you have not stored your private key in the keystore:
+**Key Functions:**
 
-<details>
+| Function | Access | Description |
+|----------|--------|-------------|
+| `registerTrader(address, uint8, bytes32, uint256)` | Relayer | Register trader with tier |
+| `revokeTrader(address)` | Relayer | Remove trader access |
+| `batchRegisterTraders(...)` | Relayer | Register multiple traders |
+| `setTierConfig(uint8, uint24, uint256, bool)` | Admin | Update tier settings |
+| `setRelayer(address)` | Admin | Change relayer address |
+| `setAdmin(address)` | Admin | Transfer admin role |
+| `getTraderInfo(address)` | Public | Get trader tier & status |
+| `getTierConfig(uint8)` | Public | Get tier configuration |
+| `canSwap(address, uint256)` | Public | Check if swap allowed |
+| `previewFee(address)` | Public | Get fee for trader |
 
-1. Add your private key to the keystore:
+**Error Codes:**
 
-```bash
-cast wallet import <SET_A_NAME_FOR_KEY> --interactive
-```
+| Error | Cause |
+|-------|-------|
+| `TraderNotRegistered()` | Trader has tier 0 |
+| `TierNotEnabled()` | Tier disabled by admin |
+| `CredentialExpired()` | Block number > expiry |
+| `TradeTooLarge(req, max)` | Trade exceeds tier limit |
+| `NotRelayer()` | Caller is not relayer |
+| `NotAdmin()` | Caller is not admin |
+| `MustUseDynamicFee()` | Pool missing dynamic fee flag |
 
-2. You will prompted to enter your private key and set a password, fill and press enter:
+---
 
-```
-Enter private key: <YOUR_PRIVATE_KEY>
-Enter keystore password: <SET_NEW_PASSWORD>
-```
+## License
 
-You should see this:
-
-```
-`<YOUR_WALLET_PRIVATE_KEY_NAME>` keystore was saved successfully. Address: <YOUR_WALLET_ADDRESS>
-```
-
-::: warning
-Use `history -c` to clear your command history.
-:::
-
-</details>
-
-1. Execute scripts:
-
-```bash
-forge script script/00_DeployHook.s.sol \
-    --rpc-url <YOUR_RPC_URL> \
-    --account <YOUR_WALLET_PRIVATE_KEY_NAME> \
-    --sender <YOUR_WALLET_ADDRESS> \
-    --broadcast
-```
-
-You will prompted to enter your wallet password, fill and press enter:
-
-```
-Enter keystore password: <YOUR_PASSWORD>
-```
-
-### Key Modifications to note:
-
-1. Update the `token0` and `token1` addresses in the `BaseScript.sol` file to match the tokens you want to use in the network of your choice for sepolia and mainnet deployments.
-2. Update the `token0Amount` and `token1Amount` in the `CreatePoolAndAddLiquidity.s.sol` file to match the amount of tokens you want to provide liquidity with.
-3. Update the `token0Amount` and `token1Amount` in the `AddLiquidity.s.sol` file to match the amount of tokens you want to provide liquidity with.
-4. Update the `amountIn` and `amountOutMin` in the `Swap.s.sol` file to match the amount of tokens you want to swap.
-
-### Verifying the hook contract
-
-```bash
-forge verify-contract \
-  --rpc-url <URL> \
-  --chain <CHAIN_NAME_OR_ID> \
-  # Generally etherscan
-  --verifier <Verification_Provider> \
-  # Use --etherscan-api-key <ETHERSCAN_API_KEY> if you are using etherscan
-  --verifier-api-key <Verification_Provider_API_KEY> \
-  --constructor-args <ABI_ENCODED_ARGS> \
-  --num-of-optimizations <OPTIMIZER_RUNS> \
-  <Contract_Address> \
-  <path/to/Contract.sol:ContractName>
-  --watch
-```
-
-### Troubleshooting
-
-<details>
-
-#### Permission Denied
-
-When installing dependencies with `forge install`, Github may throw a `Permission Denied` error
-
-Typically caused by missing Github SSH keys, and can be resolved by following the steps [here](https://docs.github.com/en/github/authenticating-to-github/connecting-to-github-with-ssh)
-
-Or [adding the keys to your ssh-agent](https://docs.github.com/en/authentication/connecting-to-github-with-ssh/generating-a-new-ssh-key-and-adding-it-to-the-ssh-agent#adding-your-ssh-key-to-the-ssh-agent), if you have already uploaded SSH keys
-
-#### Anvil fork test failures
-
-Some versions of Foundry may limit contract code size to ~25kb, which could prevent local tests to fail. You can resolve this by setting the `code-size-limit` flag
-
-```
-anvil --code-size-limit 40000
-```
-
-#### Hook deployment failures
-
-Hook deployment failures are caused by incorrect flags or incorrect salt mining
-
-1. Verify the flags are in agreement:
-   - `getHookCalls()` returns the correct flags
-   - `flags` provided to `HookMiner.find(...)`
-2. Verify salt mining is correct:
-   - In **forge test**: the _deployer_ for: `new Hook{salt: salt}(...)` and `HookMiner.find(deployer, ...)` are the same. This will be `address(this)`. If using `vm.prank`, the deployer will be the pranking address
-   - In **forge script**: the deployer must be the CREATE2 Proxy: `0x4e59b44847b379578588920cA78FbF26c0B4956C`
-     - If anvil does not have the CREATE2 deployer, your foundry may be out of date. You can update it with `foundryup`
-
-</details>
-
-### Additional Resources
-
-- [Uniswap v4 docs](https://docs.uniswap.org/contracts/v4/overview)
-- [v4-periphery](https://github.com/uniswap/v4-periphery)
-- [v4-core](https://github.com/uniswap/v4-core)
-- [v4-by-example](https://v4-by-example.org)
+MIT
