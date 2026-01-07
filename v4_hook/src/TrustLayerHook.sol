@@ -88,9 +88,8 @@ contract TrustLayerHook is BaseHook {
     }
 
     // ============ CONSTRUCTOR ============
-
-    constructor(IPoolManager _poolManager, address _relayer) BaseHook(_poolManager) {
-        admin = msg.sender;
+    constructor(IPoolManager _poolManager, address _relayer, address _admin) BaseHook(_poolManager) {
+        admin = _admin;
         relayer = _relayer;
 
         // Initialize default tier configs

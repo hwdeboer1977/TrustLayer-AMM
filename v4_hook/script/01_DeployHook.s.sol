@@ -35,15 +35,16 @@ contract DeployHookScript is BaseScript {
             Hooks.BEFORE_SWAP_FLAG
         );
 
-        address relayer;
-        bytes memory constructorArgs = abi.encode(poolManager, relayer);
+        address relayer = vm.envAddress("RELAYER");      
+        address admin = vm.envAddress("WALLET_ADDRESS"); 
+        bytes memory constructorArgs = abi.encode(poolManager, relayer, admin);
         (address hookAddress, bytes32 salt) =
             HookMiner.find(CREATE2_FACTORY, flags, type(TrustLayerHook).creationCode, constructorArgs);
 
         uint256 pk = uint256(vm.envBytes32("PRIVATE_KEY"));
         vm.startBroadcast(pk);
 
-        TrustLayerHook hook = new TrustLayerHook{salt: salt}(poolManager, relayer);
+        TrustLayerHook hook = new TrustLayerHook{salt: salt}(poolManager, relayer, admin);
 
         vm.stopBroadcast();
 
