@@ -1,89 +1,85 @@
 import { useState } from 'react';
-import { StatusCard, InfoRow, TierBadge, ErrorMessage } from './StatusCard';
 import { verifyProof } from '../utils/api';
+import { TIER_INFO } from '../abis/contracts';
 
-export function VerifyProof() {
-    const [txId, setTxId] = useState('');
-    const [result, setResult] = useState(null);
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState(null);
+export default function VerifyProof() {
+  const [txId, setTxId] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState(null);
+  const [error, setError] = useState(null);
 
-    const handleVerify = async (e) => {
-        e.preventDefault();
-        if (!txId) return;
+  const handleVerify = async () => {
+    if (!txId) return;
+    setLoading(true);
+    setError(null);
+    setResult(null);
 
-        setLoading(true);
-        setError(null);
-        setResult(null);
+    try {
+      const res = await verifyProof(txId);
+      if (res.error) {
+        setError(res.error);
+      } else {
+        setResult(res);
+      }
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-        try {
-            const data = await verifyProof(txId);
-            if (data.error) {
-                setError(data.error);
-            } else {
-                setResult(data);
-            }
-        } catch (err) {
-            setError(err.message);
-        } finally {
-            setLoading(false);
-        }
-    };
+  return (
+    <div className="panel">
+      <div className="panel-header">
+        <h3>Verify ZK Proof</h3>
+        <p className="panel-desc">Check any Aleo prove_tier transaction to see the tier and validity</p>
+      </div>
 
-    return (
-        <StatusCard title="Verify Aleo Proof">
-            <p className="description">
-                Enter a prove_tier transaction ID to verify the credential and see the tier.
-            </p>
+      <div className="form-section">
+        <div className="form-group">
+          <label>Aleo Transaction ID</label>
+          <input
+            type="text"
+            value={txId}
+            onChange={(e) => setTxId(e.target.value)}
+            placeholder="at1..."
+            className="input mono"
+          />
+        </div>
 
-            <form onSubmit={handleVerify}>
-                <div className="form-group">
-                    <label>Transaction ID</label>
-                    <input
-                        type="text"
-                        placeholder="at1yqvv5d7wg8wyehvymncxqguedg8nvnt3qv2aar5evh8ummv0jy9s75clke"
-                        value={txId}
-                        onChange={(e) => setTxId(e.target.value)}
-                    />
-                </div>
-                <button 
-                    type="submit" 
-                    className="btn-primary"
-                    disabled={loading || !txId}
-                >
-                    {loading ? 'Verifying...' : 'Verify Proof'}
-                </button>
-            </form>
+        <button
+          className="btn btn-primary"
+          onClick={handleVerify}
+          disabled={loading || !txId}
+        >
+          {loading ? '⏳ Verifying...' : '🔍 Verify Proof'}
+        </button>
+      </div>
 
-            {result && (
-                <div className={`result ${result.isValid ? 'success' : 'error'}`}>
-                    <h3>{result.isValid ? '✓ Valid Credential' : '✗ Invalid Credential'}</h3>
-                    
-                    <TierBadge tier={result.tier} tierName={result.tierName} />
-                    
-                    <InfoRow label="Tier" value={result.tier} />
-                    <InfoRow 
-                        label="Commitment" 
-                        value={result.commitment?.slice(0, 20) + '...'} 
-                    />
-                    <InfoRow 
-                        label="Was Issued" 
-                        value={result.wasIssued ? 'Yes' : 'No'} 
-                        variant={result.wasIssued ? 'valid' : 'invalid'}
-                    />
-                    <InfoRow 
-                        label="Is Revoked" 
-                        value={result.isRevoked ? 'Yes' : 'No'} 
-                        variant={result.isRevoked ? 'invalid' : 'valid'}
-                    />
-                    <InfoRow 
-                        label="Block Checked" 
-                        value={result.currentBlock} 
-                    />
-                </div>
-            )}
+      {error && (
+        <div className="result-box result-error">
+          <strong>❌ Verification Failed</strong>
+          <p>{error}</p>
+        </div>
+      )}
 
-            <ErrorMessage message={error} />
-        </StatusCard>
-    );
+      {result && (
+        <div className={`result-box ${result.isValid ? 'result-success' : 'result-warning'}`}>
+          <strong>{result.isValid ? '✅' : '⚠️'} {result.message}</strong>
+          <div className="result-details">
+            <div>
+              <span>Tier:</span>
+              <strong style={{ color: TIER_INFO[result.tier]?.color }}>
+                {result.tier} — {result.tierName}
+              </strong>
+            </div>
+            <div><span>Commitment:</span> <span className="mono small">{result.commitment}</span></div>
+            <div><span>Block Used:</span> {result.currentBlock}</div>
+            <div><span>Issued On-Chain:</span> {result.wasIssued ? '✅ Yes' : '❌ No'}</div>
+            <div><span>Revoked:</span> {result.isRevoked ? '🚫 Yes' : '✅ No'}</div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }

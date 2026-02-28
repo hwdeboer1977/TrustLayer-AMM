@@ -1,6 +1,6 @@
-export { ConnectWallet } from './ConnectWallet';
-export { StatusCard, InfoRow, TierBadge, LoadingSpinner, ErrorMessage, SuccessMessage } from './StatusCard';
-export { MyStatus } from './MyStatus';
-export { RegisterMe } from './RegisterTrader';
-export { VerifyProof } from './VerifyProof';
-export { Admin } from './Admin';
+export { default as ConnectWallet } from './ConnectWallet';
+export { default as MyStatus } from './MyStatus';
+export { default as RegisterMe } from './RegisterMe';
+export { default as VerifyProof } from './VerifyProof';
+export { default as Admin } from './Admin';
+export { default as SwapPanel } from './SwapPanel';

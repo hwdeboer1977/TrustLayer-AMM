@@ -1,6 +1,9 @@
 const express = require('express');
 const cors = require('cors');
 const { ethers } = require('ethers');
+const { exec } = require('child_process');
+const util = require('util');
+const execAsync = util.promisify(exec);
 require('dotenv').config();
 
 const app = express();
@@ -14,6 +17,9 @@ app.use(express.json());
 const ALEO_ENDPOINT = process.env.ALEO_ENDPOINT || 'https://api.explorer.provable.com/v1';
 const ALEO_NETWORK = process.env.ALEO_NETWORK || 'testnet';
 const ALEO_PROGRAM = process.env.ALEO_PROGRAM || 'trustlayer_credentials_amm_v2.aleo';
+
+// Aleo admin/issuer key (for issuing credentials, managing issuers, revoking)
+const ALEO_PRIVATE_KEY = process.env.ALEO_PRIVATE_KEY;
 
 // Ethereum/Arbitrum config
 const ETH_RPC = process.env.ARB_RPC || process.env.ETH_RPC || 'http://127.0.0.1:8545';
@@ -505,6 +511,193 @@ app.post('/api/eth/revoke-trader', async (req, res) => {
         console.error('Revocation error:', error);
         res.status(500).json({ error: error.message });
     }
+});
+
+// ============ ALEO ISSUER / ADMIN ROUTES ============
+
+// Helper: compute tier from score
+function tierFromScore(score) {
+    if (score >= 800) return { tier: 3, name: 'Tier A (Whale)' };
+    if (score >= 700) return { tier: 2, name: 'Tier B (Pro)' };
+    if (score >= 600) return { tier: 1, name: 'Tier C (Basic)' };
+    return { tier: 0, name: 'Ineligible' };
+}
+
+// Issue a credential to a user on Aleo
+// POST /api/aleo/issue-credential
+// Body: { recipient, score, expiry, nonce }
+app.post('/api/aleo/issue-credential', async (req, res) => {
+    const { recipient, score, expiry, nonce } = req.body;
+
+    if (!recipient || score === undefined || !expiry || !nonce) {
+        return res.status(400).json({ error: 'Missing required fields: recipient, score, expiry, nonce' });
+    }
+
+    if (score < 0 || score > 1000) {
+        return res.status(400).json({ error: 'Score must be between 0 and 1000' });
+    }
+
+    if (!ALEO_PRIVATE_KEY) {
+        return res.status(503).json({ error: 'Aleo private key not configured. Set ALEO_PRIVATE_KEY in .env' });
+    }
+
+    try {
+        const command = [
+            'snarkos developer execute',
+            ALEO_PROGRAM,
+            'issue',
+            `${recipient}`,
+            `${score}u16`,
+            `${expiry}u32`,
+            `${nonce}`,
+            `--private-key ${ALEO_PRIVATE_KEY}`,
+            `--query ${ALEO_ENDPOINT}`,
+            `--broadcast ${ALEO_ENDPOINT}/${ALEO_NETWORK}/transaction/broadcast`,
+            '--network 1',
+        ].join(' ');
+
+        console.log('Executing issue credential...');
+        console.log(`  Recipient: ${recipient}, Score: ${score}, Expiry: ${expiry}`);
+
+        const { stdout } = await execAsync(command, { timeout: 120000 });
+        const txMatch = stdout.match(/at1[a-z0-9]+/);
+        const tierInfo = tierFromScore(score);
+
+        res.json({
+            success: true,
+            message: `Credential issued: ${tierInfo.name} (score: ${score})`,
+            txId: txMatch ? txMatch[0] : null,
+            recipient,
+            score,
+            expiry,
+            nonce,
+            tier: tierInfo.tier,
+            tierName: tierInfo.name,
+        });
+    } catch (error) {
+        console.error('Issue credential error:', error);
+        res.status(500).json({
+            error: `Failed to issue credential: ${error.message}`,
+            hint: 'Make sure snarkos is installed and ALEO_PRIVATE_KEY belongs to an approved issuer.',
+        });
+    }
+});
+
+// Approve an issuer on Aleo (admin only)
+// POST /api/aleo/add-issuer
+// Body: { issuerAddress }
+app.post('/api/aleo/add-issuer', async (req, res) => {
+    const { issuerAddress } = req.body;
+    if (!issuerAddress) return res.status(400).json({ error: 'issuerAddress is required' });
+    if (!ALEO_PRIVATE_KEY) return res.status(503).json({ error: 'Aleo private key not configured' });
+
+    try {
+        const command = [
+            'snarkos developer execute',
+            ALEO_PROGRAM,
+            'add_issuer',
+            issuerAddress,
+            `--private-key ${ALEO_PRIVATE_KEY}`,
+            `--query ${ALEO_ENDPOINT}`,
+            `--broadcast ${ALEO_ENDPOINT}/${ALEO_NETWORK}/transaction/broadcast`,
+            '--network 1',
+        ].join(' ');
+
+        const { stdout } = await execAsync(command, { timeout: 120000 });
+        const txMatch = stdout.match(/at1[a-z0-9]+/);
+
+        res.json({
+            success: true,
+            message: `Issuer ${issuerAddress.slice(0, 12)}... approved`,
+            txId: txMatch ? txMatch[0] : null,
+            issuerAddress,
+        });
+    } catch (error) {
+        console.error('Add issuer error:', error);
+        res.status(500).json({
+            error: `Failed to add issuer: ${error.message}`,
+            hint: 'Only the admin address can add issuers.',
+        });
+    }
+});
+
+// Remove an issuer on Aleo (admin only)
+// POST /api/aleo/remove-issuer
+// Body: { issuerAddress }
+app.post('/api/aleo/remove-issuer', async (req, res) => {
+    const { issuerAddress } = req.body;
+    if (!issuerAddress) return res.status(400).json({ error: 'issuerAddress is required' });
+    if (!ALEO_PRIVATE_KEY) return res.status(503).json({ error: 'Aleo private key not configured' });
+
+    try {
+        const command = [
+            'snarkos developer execute',
+            ALEO_PROGRAM,
+            'remove_issuer',
+            issuerAddress,
+            `--private-key ${ALEO_PRIVATE_KEY}`,
+            `--query ${ALEO_ENDPOINT}`,
+            `--broadcast ${ALEO_ENDPOINT}/${ALEO_NETWORK}/transaction/broadcast`,
+            '--network 1',
+        ].join(' ');
+
+        const { stdout } = await execAsync(command, { timeout: 120000 });
+        const txMatch = stdout.match(/at1[a-z0-9]+/);
+
+        res.json({
+            success: true,
+            message: `Issuer ${issuerAddress.slice(0, 12)}... removed`,
+            txId: txMatch ? txMatch[0] : null,
+            issuerAddress,
+        });
+    } catch (error) {
+        console.error('Remove issuer error:', error);
+        res.status(500).json({ error: `Failed to remove issuer: ${error.message}` });
+    }
+});
+
+// Revoke a credential on Aleo (admin only)
+// POST /api/aleo/revoke-credential
+// Body: { commitment }
+app.post('/api/aleo/revoke-credential', async (req, res) => {
+    const { commitment } = req.body;
+    if (!commitment) return res.status(400).json({ error: 'commitment is required' });
+    if (!ALEO_PRIVATE_KEY) return res.status(503).json({ error: 'Aleo private key not configured' });
+
+    try {
+        const command = [
+            'snarkos developer execute',
+            ALEO_PROGRAM,
+            'revoke',
+            commitment,
+            `--private-key ${ALEO_PRIVATE_KEY}`,
+            `--query ${ALEO_ENDPOINT}`,
+            `--broadcast ${ALEO_ENDPOINT}/${ALEO_NETWORK}/transaction/broadcast`,
+            '--network 1',
+        ].join(' ');
+
+        const { stdout } = await execAsync(command, { timeout: 120000 });
+        const txMatch = stdout.match(/at1[a-z0-9]+/);
+
+        res.json({
+            success: true,
+            message: 'Credential revoked on Aleo',
+            txId: txMatch ? txMatch[0] : null,
+            commitment,
+        });
+    } catch (error) {
+        console.error('Revoke credential error:', error);
+        res.status(500).json({ error: `Failed to revoke credential: ${error.message}` });
+    }
+});
+
+// Note: Aleo mappings don't support enumeration
+// GET /api/aleo/credentials
+app.get('/api/aleo/credentials', async (req, res) => {
+    res.json({
+        message: 'Aleo mappings do not support enumeration. Use /api/verify/:commitment to check individual credentials.',
+        hint: 'Track commitments in a database when issuing via /api/aleo/issue-credential.',
+    });
 });
 
 // ============ START SERVER ============
