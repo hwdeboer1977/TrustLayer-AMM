@@ -21,10 +21,9 @@ export const ERC20_ABI = [
   "function transfer(address to, uint256 amount) returns (bool)"
 ];
 
-// Uniswap V4 PoolSwapTest (test router used on testnets for swapping through hooks)
-// This is the standard test contract deployed alongside V4 core
+// Custom TrustLayer Swap Router (wraps V4 PoolSwapTest with a friendlier interface)
 export const SWAP_ROUTER_ABI = [
-  "function swap(tuple(address currency0, address currency1, uint24 fee, int24 tickSpacing, address hooks) key, tuple(bool zeroForOne, int256 amountSpecified, uint160 sqrtPriceLimitX96) params, tuple(bool takeClaims, bool settleUsingBurn) testSettings, bytes hookData) external payable returns (int256)",
+  "function swapExactTokensForTokens(uint256 amountIn, uint256 amountOutMin, bool zeroForOne, tuple(address currency0, address currency1, uint24 fee, int24 tickSpacing, address hooks) poolKey, bytes hookData, address receiver, uint256 deadline) external returns (uint256 amountOut)",
 ];
 
 // PoolManager ABI - for reading pool state

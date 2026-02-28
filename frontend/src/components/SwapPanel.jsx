@@ -12,9 +12,7 @@ import { getTraderInfo } from '../utils/api';
 
 // ============ Constants ============
 
-const MAX_UINT160 = '1461501637330902918203684832716283019655932542975';
-const MIN_SQRT_PRICE_LIMIT = '4295128739';       // TickMath.MIN_SQRT_PRICE + 1
-const MAX_SQRT_PRICE_LIMIT = MAX_UINT160;         // TickMath.MAX_SQRT_PRICE - 1
+const DYNAMIC_FEE_FLAG = 0x800000;
 
 // Default token list — update these with your deployed mock tokens
 const DEFAULT_TOKENS = [
@@ -22,14 +20,14 @@ const DEFAULT_TOKENS = [
     symbol: 'TLA',
     name: 'TrustLayer Token A',
     address: ADDRESSES.TOKEN_A,
-    decimals: 18,
+    decimals: 6,
     logo: '🔵',
   },
   {
     symbol: 'TLB',
     name: 'TrustLayer Token B',
     address: ADDRESSES.TOKEN_B,
-    decimals: 18,
+    decimals: 6,
     logo: '🟠',
   },
 ];
@@ -103,23 +101,37 @@ export default function SwapPanel({ address, signer, provider, isCorrectChain })
   // ============ Fetch balances ============
 
   const fetchBalances = useCallback(async () => {
-    if (!address || !provider || !tokenIn || !tokenOut) return;
+    if (!address || !tokenIn || !tokenOut) return;
+
+    // Use signer's provider as fallback (more reliable when multiple wallets installed)
+    const p = provider || (signer ? signer.provider : null);
+    if (!p) return;
 
     try {
-      const tokenInContract = new ethers.Contract(tokenIn.address, ERC20_ABI, provider);
-      const tokenOutContract = new ethers.Contract(tokenOut.address, ERC20_ABI, provider);
+      const tokenInContract = new ethers.Contract(tokenIn.address, ERC20_ABI, p);
+      const tokenOutContract = new ethers.Contract(tokenOut.address, ERC20_ABI, p);
 
       const [balIn, balOut] = await Promise.all([
         tokenInContract.balanceOf(address),
         tokenOutContract.balanceOf(address),
       ]);
 
+      console.log('Balance raw:', { 
+        tokenIn: tokenIn.symbol, 
+        balIn: balIn.toString(), 
+        tokenOut: tokenOut.symbol, 
+        balOut: balOut.toString(),
+        address,
+        tokenInAddr: tokenIn.address,
+        tokenOutAddr: tokenOut.address,
+      });
+
       setBalanceIn(ethers.formatUnits(balIn, tokenIn.decimals));
       setBalanceOut(ethers.formatUnits(balOut, tokenOut.decimals));
     } catch (err) {
       console.error('Balance fetch error:', err);
     }
-  }, [address, provider, tokenIn, tokenOut]);
+  }, [address, provider, signer, tokenIn, tokenOut]);
 
   // ============ Check approval ============
 
@@ -213,21 +225,18 @@ export default function SwapPanel({ address, signer, provider, isCorrectChain })
         hooks: ADDRESSES.HOOK,
       };
 
-      // Swap params
       const amountSpecified = ethers.parseUnits(amountIn, tokenIn.decimals);
-      const swapParams = {
-        zeroForOne: zeroForOne,
-        amountSpecified: -amountSpecified, // negative = exact input
-        sqrtPriceLimitX96: zeroForOne ? MIN_SQRT_PRICE_LIMIT : MAX_SQRT_PRICE_LIMIT,
-      };
+      const deadline = Math.floor(Date.now() / 1000) + 3600; // 1 hour
 
-      // Test settings (for PoolSwapTest router)
-      const testSettings = {
-        takeClaims: false,
-        settleUsingBurn: false,
-      };
-
-      const tx = await router.swap(poolKey, swapParams, testSettings, '0x');
+      const tx = await router.swapExactTokensForTokens(
+        amountSpecified,
+        0,              // amountOutMin: no slippage protection for demo
+        zeroForOne,
+        poolKey,
+        '0x',           // hookData
+        address,         // receiver: send output to the connected wallet
+        deadline
+      );
       const receipt = await tx.wait();
 
       setTxHash(receipt.hash);
