@@ -113,3 +113,30 @@ export async function getIssuedCredentials() {
   const res = await fetch(`${API_BASE}/api/aleo/credentials`);
   return res.json();
 }
+
+export async function fetchCredentialFromTx(txId) {
+  const res = await fetch(`${API_BASE}/api/aleo/fetch-credential`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ txId }),
+  });
+  return res.json();
+}
+
+export async function decryptRecord(ciphertext, viewKey) {
+  const res = await fetch(`${API_BASE}/api/aleo/decrypt-record`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ciphertext, viewKey }),
+  });
+  return res.json();
+}
+
+export async function proveTierBackend(record) {
+  const res = await fetch(`${API_BASE}/api/aleo/prove-tier`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ record }),
+  });
+  return res.json();
+}

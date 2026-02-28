@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useWallet } from './hooks/useWallet';
+import { useWallet as useAleoWallet } from '@demox-labs/aleo-wallet-adapter-react';
+import { WalletMultiButton } from '@demox-labs/aleo-wallet-adapter-reactui';
 import { getBlockHeight } from './utils/api';
 import {
   ConnectWallet,
@@ -8,6 +10,7 @@ import {
   VerifyProof,
   Admin,
   SwapPanel,
+  ProveTier,
 } from './components';
 
 function App() {
@@ -23,6 +26,7 @@ function App() {
     disconnect,
     switchChain,
   } = useWallet();
+  const { publicKey: aleoAddress, connected: aleoConnected } = useAleoWallet();
   const [activeTab, setActiveTab] = useState('swap');
   const [blockHeight, setBlockHeight] = useState(null);
 
@@ -44,6 +48,7 @@ function App() {
   const tabs = [
     { id: 'swap', label: 'Swap', icon: '💱' },
     { id: 'status', label: 'My Status', icon: '👤' },
+    { id: 'prove', label: 'Prove Tier', icon: '🔐' },
     { id: 'register', label: 'Register', icon: '🔗' },
     { id: 'verify', label: 'Verify Proof', icon: '🔍' },
     { id: 'admin', label: 'Admin', icon: '⚙️' },
@@ -60,27 +65,32 @@ function App() {
               <p className="subtitle">ZK Credit-Score-Weighted Trading on Uniswap V4</p>
             </div>
           </div>
-          <ConnectWallet
-            address={address}
-            chainId={chainId}
-            isConnecting={isConnecting}
-            isCorrectChain={isCorrectChain}
-            onConnect={connect}
-            onDisconnect={disconnect}
-            onSwitchChain={switchChain}
-          />
+          <div className="header-wallets">
+            <WalletMultiButton />
+            <ConnectWallet
+              address={address}
+              chainId={chainId}
+              isConnecting={isConnecting}
+              isCorrectChain={isCorrectChain}
+              onConnect={connect}
+              onDisconnect={disconnect}
+              onSwitchChain={switchChain}
+            />
+          </div>
         </div>
       </header>
 
       <main className="container">
         <div className="status-bar">
           <div className="status-left">
-            <span className="status aleo">● Aleo Testnet</span>
+            <span className={`status ${aleoConnected ? 'aleo-connected' : 'aleo'}`}>
+              ● Aleo {aleoConnected ? `(${aleoAddress?.slice(0, 8)}...)` : 'Not Connected'}
+            </span>
             <span className="block">Block: {blockHeight?.toLocaleString() || '...'}</span>
           </div>
           <div className="status-right">
             <span className={`status ${isConnected ? 'eth-connected' : 'eth-disconnected'}`}>
-              ● {isConnected ? `Arb Sepolia` : 'Not Connected'}
+              ● {isConnected ? `Arb Sepolia` : 'ETH Not Connected'}
             </span>
           </div>
         </div>
@@ -137,6 +147,7 @@ function App() {
             />
           )}
           {activeTab === 'status' && <MyStatus address={address} />}
+          {activeTab === 'prove' && <ProveTier />}
           {activeTab === 'register' && <RegisterMe address={address} />}
           {activeTab === 'verify' && <VerifyProof />}
           {activeTab === 'admin' && <Admin />}

@@ -533,13 +533,23 @@ app.post('/api/aleo/issue-credential', async (req, res) => {
         return res.status(400).json({ error: 'Missing required fields: recipient, score, expiry, nonce' });
     }
 
-    if (score < 0 || score > 1000) {
+    const scoreInt = parseInt(score);
+    const expiryInt = parseInt(expiry);
+
+    if (scoreInt < 0 || scoreInt > 1000) {
         return res.status(400).json({ error: 'Score must be between 0 and 1000' });
+    }
+
+    if (expiryInt < 1 || expiryInt > 4294967295) {
+        return res.status(400).json({ error: 'Expiry must be a valid u32 (1 to 4294967295). Use a realistic Aleo block height like 500000.' });
     }
 
     if (!ALEO_PRIVATE_KEY) {
         return res.status(503).json({ error: 'Aleo private key not configured. Set ALEO_PRIVATE_KEY in .env' });
     }
+
+    // Ensure nonce has 'field' suffix
+    const nonceStr = nonce.toString().endsWith('field') ? nonce.toString() : `${nonce}field`;
 
     try {
         const command = [
@@ -547,9 +557,9 @@ app.post('/api/aleo/issue-credential', async (req, res) => {
             ALEO_PROGRAM,
             'issue',
             `${recipient}`,
-            `${score}u16`,
-            `${expiry}u32`,
-            `${nonce}`,
+            `${scoreInt}u16`,
+            `${expiryInt}u32`,
+            nonceStr,
             `--private-key ${ALEO_PRIVATE_KEY}`,
             `--query ${ALEO_ENDPOINT}`,
             `--broadcast ${ALEO_ENDPOINT}/${ALEO_NETWORK}/transaction/broadcast`,
@@ -698,6 +708,162 @@ app.get('/api/aleo/credentials', async (req, res) => {
         message: 'Aleo mappings do not support enumeration. Use /api/verify/:commitment to check individual credentials.',
         hint: 'Track commitments in a database when issuing via /api/aleo/issue-credential.',
     });
+});
+
+// ============ CREDENTIAL RECORD DECRYPTION ============
+
+// Execute prove_tier on behalf of the credential owner (demo mode: admin = owner)
+// POST /api/aleo/prove-tier
+// Body: { record } - the decrypted credential record plaintext
+app.post('/api/aleo/prove-tier', async (req, res) => {
+    const { record } = req.body;
+
+    if (!record) {
+        return res.status(400).json({ error: 'record (credential plaintext) is required' });
+    }
+
+    if (!ALEO_PRIVATE_KEY) {
+        return res.status(503).json({ error: 'Aleo private key not configured. Set ALEO_PRIVATE_KEY in .env' });
+    }
+
+    try {
+        // Fetch current block height for the second argument
+        const fetch = (await import('node-fetch')).default;
+        const heightRes = await fetch(`${ALEO_ENDPOINT}/${ALEO_NETWORK}/block/height/latest`);
+        const currentBlock = await heightRes.json();
+
+        console.log('Executing prove_tier...');
+        console.log(`  Current block: ${currentBlock}`);
+
+        // Clean up the record plaintext - ensure it's properly formatted
+        const cleanRecord = record.trim();
+
+        const command = [
+            'snarkos developer execute',
+            ALEO_PROGRAM,
+            'prove_tier',
+            `"${cleanRecord}"`,
+            `${currentBlock}u32`,
+            `--private-key ${ALEO_PRIVATE_KEY}`,
+            `--query ${ALEO_ENDPOINT}`,
+            `--broadcast ${ALEO_ENDPOINT}/${ALEO_NETWORK}/transaction/broadcast`,
+            '--network 1',
+        ].join(' ');
+
+        const { stdout, stderr } = await execAsync(command, { timeout: 300000 }); // 5 min timeout for proof generation
+        const txMatch = stdout.match(/at1[a-z0-9]+/);
+
+        console.log('prove_tier stdout:', stdout.slice(0, 500));
+        if (stderr) console.log('prove_tier stderr:', stderr.slice(0, 300));
+
+        res.json({
+            success: true,
+            message: 'ZK tier proof generated and broadcast!',
+            txId: txMatch ? txMatch[0] : null,
+            blockHeight: currentBlock,
+        });
+    } catch (error) {
+        console.error('prove_tier error:', error);
+        res.status(500).json({
+            error: `Failed to execute prove_tier: ${error.message}`,
+            hint: 'Make sure the credential record is valid and not already spent. The ALEO_PRIVATE_KEY must own this record.',
+        });
+    }
+});
+
+// Decrypt a record ciphertext using the view key
+// POST /api/aleo/decrypt-record
+// Body: { ciphertext, viewKey? }
+app.post('/api/aleo/decrypt-record', async (req, res) => {
+    const { ciphertext, viewKey } = req.body;
+    const vk = viewKey || process.env.ALEO_VIEW_KEY;
+
+    if (!ciphertext) return res.status(400).json({ error: 'ciphertext is required' });
+    if (!vk) return res.status(503).json({ error: 'No view key available. Set ALEO_VIEW_KEY in .env or provide viewKey in request.' });
+
+    try {
+        const command = `snarkos developer decrypt --ciphertext "${ciphertext}" --view-key "${vk}"`;
+        const { stdout } = await execAsync(command, { timeout: 30000 });
+        const plaintext = stdout.trim();
+
+        res.json({
+            success: true,
+            plaintext,
+        });
+    } catch (error) {
+        console.error('Decrypt error:', error);
+        res.status(500).json({ error: `Failed to decrypt: ${error.message}` });
+    }
+});
+
+// Fetch credential record from a transaction and decrypt it
+// POST /api/aleo/fetch-credential
+// Body: { txId, viewKey? }
+app.post('/api/aleo/fetch-credential', async (req, res) => {
+    const { txId, viewKey } = req.body;
+    const vk = viewKey || process.env.ALEO_VIEW_KEY;
+
+    if (!txId) return res.status(400).json({ error: 'txId is required' });
+    if (!vk) return res.status(503).json({ error: 'No view key available. Set ALEO_VIEW_KEY in .env or provide viewKey in request.' });
+
+    try {
+        // Fetch the transaction from Aleo API
+        const txUrl = `${ALEO_ENDPOINT}/${ALEO_NETWORK}/transaction/${txId}`;
+        console.log('Fetching transaction:', txUrl);
+
+        const fetch = (await import('node-fetch')).default;
+        const txRes = await fetch(txUrl);
+        if (!txRes.ok) {
+            return res.status(404).json({ error: `Transaction not found: ${txRes.status}` });
+        }
+        const txData = await txRes.json();
+
+        // Extract record ciphertexts from execution transitions
+        const transitions = txData?.execution?.transitions || [];
+        const records = [];
+
+        for (const transition of transitions) {
+            if (transition.program !== ALEO_PROGRAM) continue;
+
+            for (const output of (transition.outputs || [])) {
+                if (output.type === 'record' && output.value) {
+                    try {
+                        const command = `snarkos developer decrypt --ciphertext "${output.value}" --view-key "${vk}"`;
+                        const { stdout } = await execAsync(command, { timeout: 30000 });
+                        const plaintext = stdout.trim();
+
+                        if (plaintext && plaintext.includes('score')) {
+                            records.push({
+                                plaintext,
+                                ciphertext: output.value,
+                                transitionId: transition.id,
+                                function: transition.function,
+                            });
+                        }
+                    } catch (decryptErr) {
+                        // Not our record or wrong view key — skip
+                        console.log('Could not decrypt output:', decryptErr.message?.slice(0, 80));
+                    }
+                }
+            }
+        }
+
+        if (records.length === 0) {
+            return res.status(404).json({
+                error: 'No Credential records found in this transaction (or view key cannot decrypt them).',
+                hint: 'Make sure ALEO_VIEW_KEY matches the credential owner.',
+            });
+        }
+
+        res.json({
+            success: true,
+            records,
+            txId,
+        });
+    } catch (error) {
+        console.error('Fetch credential error:', error);
+        res.status(500).json({ error: `Failed to fetch credential: ${error.message}` });
+    }
 });
 
 // ============ START SERVER ============

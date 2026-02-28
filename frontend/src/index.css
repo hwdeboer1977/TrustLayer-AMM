@@ -900,6 +900,150 @@ a:hover { text-decoration: underline; }
   border-top: 1px solid var(--border-subtle);
 }
 
+/* ============ Header Wallets ============ */
+.header-wallets {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+/* Override Aleo wallet adapter button styles to match our theme */
+.wallet-adapter-button {
+  background: var(--bg-surface) !important;
+  border: 1px solid var(--border-medium) !important;
+  border-radius: var(--radius-lg) !important;
+  color: var(--text-primary) !important;
+  font-family: var(--font-body) !important;
+  font-size: 0.8rem !important;
+  height: auto !important;
+  padding: 0.5rem 1rem !important;
+}
+
+.wallet-adapter-button:hover {
+  border-color: var(--accent-purple) !important;
+  background: var(--bg-card-hover) !important;
+}
+
+.wallet-adapter-button-trigger {
+  background: var(--gradient-primary) !important;
+  border: none !important;
+}
+
+.wallet-adapter-modal-wrapper {
+  background: var(--bg-card) !important;
+  border: 1px solid var(--border-medium) !important;
+}
+
+.wallet-adapter-modal-title {
+  color: var(--text-primary) !important;
+}
+
+/* Aleo connected status */
+.status.aleo-connected { color: var(--accent-purple); }
+
+/* ============ Prove Tier Component ============ */
+.prove-step {
+  margin-top: 1.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.prove-step:first-of-type {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
+}
+
+.prove-step-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.prove-step-header h4 {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.prove-step-num {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--gradient-primary);
+  color: white;
+  font-size: 0.75rem;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.credential-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.credential-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 1rem;
+  background: var(--bg-surface);
+  border: 2px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: left;
+  font-family: var(--font-body);
+  color: var(--text-primary);
+}
+
+.credential-card:hover {
+  border-color: var(--border-medium);
+  background: var(--bg-card-hover);
+}
+
+.credential-card.selected {
+  border-color: var(--accent-purple);
+  background: rgba(139, 92, 246, 0.08);
+  box-shadow: 0 0 12px rgba(139, 92, 246, 0.15);
+}
+
+.cred-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.cred-label {
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+.cred-selected-badge {
+  font-size: 0.7rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: var(--radius-sm);
+  background: var(--accent-purple);
+  color: white;
+  font-weight: 600;
+}
+
+.cred-details {
+  display: flex;
+  gap: 1.5rem;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.cred-details span { color: var(--text-muted); }
+
 /* ============ Issuer Section ============ */
 .issuer-section h4 {
   font-size: 1rem;
