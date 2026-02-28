@@ -6,7 +6,7 @@ export default function ConnectWallet({ address, chainId, isConnecting, isCorrec
   if (!address) {
     return (
       <button className="btn btn-connect" onClick={onConnect} disabled={isConnecting}>
-        {isConnecting ? '⏳ Connecting...' : '🔗 Connect Wallet'}
+        {isConnecting ? '⏳ Connecting...' : '🔗 Connect EVM Wallet'}
       </button>
     );
   }

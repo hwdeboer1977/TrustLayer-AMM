@@ -927,6 +927,12 @@ a:hover { text-decoration: underline; }
 .wallet-adapter-button-trigger {
   background: var(--gradient-primary) !important;
   border: none !important;
+  font-size: 0 !important;
+}
+
+.wallet-adapter-button-trigger::after {
+  content: 'Connect Aleo Wallet';
+  font-size: 0.8rem;
 }
 
 .wallet-adapter-modal-wrapper {
